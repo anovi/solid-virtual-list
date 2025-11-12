@@ -1,6 +1,6 @@
 /* eslint-disable complexity */
 import type { Accessor, JSX, JSXElement } from 'solid-js';
-import { createMemo, createRoot, createSignal } from 'solid-js';
+import { createMemo, createRoot, createSignal, onMount } from 'solid-js';
 
 
 /** REQUIREMENTS
@@ -144,6 +144,10 @@ export function createVirtualList<Model extends object>(params: {
 
 	const itemsToMeasure = new Map<Model, HTMLElement>();
 	let measureAnimationFrameID = -1;
+
+	onMount(() => {
+		measureContainer();
+	})
 
 	function measure() {
 		const nonMeasured = itemsToMeasure.size;

@@ -66,3 +66,20 @@ button:focus-visible {
 		background-color: #f9f9f9;
 	}
 }
+
+
+.virtualList {
+	height: 400px;
+	width: 200px;
+	overflow: hidden auto;
+	background: #eeeeee;
+}
+.virtualList__items {
+	position: 'absolute';
+	right: 0;
+	left: 0;
+}
+
+.virtualList__item {
+	height: 30px;
+}

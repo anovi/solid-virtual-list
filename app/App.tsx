@@ -1,37 +1,35 @@
-import { createSignal } from 'solid-js'
-import solidLogo from './assets/solid.svg'
-import viteLogo from '/vite.svg'
+import { createSignal, onCleanup } from 'solid-js'
+
 import './App.css'
 import { createVirtualList } from '../src/create-virtual'
+import { makeModels } from './models'
 
 
 function App() {
-	const [count, setCount] = createSignal(0)
-	console.log(createVirtualList)
-	
+	const models = makeModels();
+
+	const virtual = createVirtualList({
+		models: () => models,
+		getElement: (item, index, ref) => {
+			return <div class="virtualList__item" ref={ref}>{item.title}</div>
+		},
+		itemHeight: 30,
+	})
+
+	onCleanup(() => {
+        if (virtual) virtual.cleanup();
+    });
+
 	return (
-		<>
 		<div>
-		<a href="https://vite.dev" target="_blank">
-		<img src={viteLogo} class="logo" alt="Vite logo" />
-		</a>
-		<a href="https://solidjs.com" target="_blank">
-		<img src={solidLogo} class="logo solid" alt="Solid logo" />
-		</a>
+			<div class="virtualList">
+				<div class="virtualList__scroller" style={{ height: `${virtual.height()}px` }} ref={virtual.scrollElem}>
+					<div class="virtualList__items" style={{ 'top': virtual.itemsWrapperTop() + 'px'}}>
+                    	{virtual.items()}
+                	</div>
+				</div>
+			</div>
 		</div>
-		<h1>Vite + Solid</h1>
-		<div class="card">
-		<button onClick={() => setCount((count) => count + 1)}>
-		count is {count()}
-		</button>
-		<p>
-		Edit <code>src/App.tsx</code> and save to test HMR
-		</p>
-		</div>
-		<p class="read-the-docs">
-		Click on the Vite and Solid logos to learn more
-		</p>
-		</>
 	)
 }
 
