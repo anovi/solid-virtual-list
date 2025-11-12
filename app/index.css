@@ -73,6 +73,7 @@ button:focus-visible {
 	width: 200px;
 	overflow: hidden auto;
 	background: #eeeeee;
+	position: relative;
 }
 .virtualList__items {
 	position: 'absolute';

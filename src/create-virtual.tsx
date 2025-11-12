@@ -193,7 +193,7 @@ export function createVirtualList<Model extends object>(params: {
 	// 
 	// To avoid that, after the items are mesured, we need to ajust:
 	// - scroll top position
-	// - height of the the whole list
+	// - height of the whole list
 	function ajustAfterRenderingNonMeasuredItemsAbove(items: number, compoundHeight: number) {
 		const fromTop = scrollTop();
 		const expectedHeight = items * expectedItemHeight; 

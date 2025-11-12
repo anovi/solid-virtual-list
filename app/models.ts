@@ -5,7 +5,7 @@ export type Model = {
 
 export function makeModels() {
 	const result: Model[] = [];
-	for (let index = 0; index < 99999; index++) {
+	for (let index = 0; index < 9999; index++) {
 		result.push({
 			title: `Item ${index}`,
 			description: '',
