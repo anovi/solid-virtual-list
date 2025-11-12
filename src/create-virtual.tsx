@@ -1,6 +1,6 @@
 /* eslint-disable complexity */
 import type { Accessor, JSX, JSXElement } from 'solid-js';
-import { createMemo, createRoot, createSignal, onMount } from 'solid-js';
+import { createMemo, createRoot, createSignal, onCleanup, onMount } from 'solid-js';
 
 
 /** REQUIREMENTS
@@ -103,8 +103,6 @@ export interface VirtualList {
 	 * Onces scrollable element is rendered, pass it to this callback.
 	 */
 	scrollElem: (elem: HTMLElement) => void,
-
-	cleanup: () => void;
 }
 
 /**
@@ -115,6 +113,10 @@ export function createVirtualList<Model extends object>(params: {
     itemHeight?: number,
 	itemMargins?: { top?: number, bottom?: number}
 	expectedItemHeight?: number,
+	/**
+	 * How much content (in pixels) to render beyond viewport.
+	 * Useful to avoid glitches while scrolling fast.
+	*/
 	renderBeyondFold?: number,
     getElement: (item: Model, index: number, ref: (elem: HTMLElement) => void) => JSX.Element
 }) { 
@@ -154,7 +156,6 @@ export function createVirtualList<Model extends object>(params: {
 		let compoundMeasuredHeight = 0;
 		let newItemMarginValue = 0;
 		let firstWithMargin: HTMLElement|null = null;
-		// console.log('Measuring', nonMeasured, 'items');
 		itemsToMeasure.forEach((elem, model) => {
 			const height = elem.getBoundingClientRect().height;
 			if (itemMarginTop === undefined) {
@@ -210,7 +211,6 @@ export function createVirtualList<Model extends object>(params: {
 		queueMicrotask(() => {
 			if (itemsToMeasure.size === 0 || measureAnimationFrameID > -1) return;
 			measureAnimationFrameID = window.requestAnimationFrame(measure);
-			// console.log('Measurement scheduled:', animationFrame)
 		})
 	}
 	
@@ -262,7 +262,7 @@ export function createVirtualList<Model extends object>(params: {
                 const item = modelsItems[index];
                 const itemTop = itemsHeightCompounded;
 				const itemHeight = getItemHeight(item);
-				
+
                 if (!shouldRender(
 					itemsHeightCompounded,
 					itemsHeightCompounded + itemHeight,
@@ -321,17 +321,17 @@ export function createVirtualList<Model extends object>(params: {
         }
     );
 
-
 	const virtualList: VirtualList = {
 		items: itemsMemo,
 		height,
 		scrollElem: setScrollElem,
 		itemsWrapperTop,
-		cleanup() {
-			if (measureAnimationFrameID) cancelAnimationFrame(measureAnimationFrameID);
-			if (scrollAnimationFrameID) cancelAnimationFrame(scrollAnimationFrameID);
-		},
 	}
+
+	onCleanup(() => {
+		if (measureAnimationFrameID) cancelAnimationFrame(measureAnimationFrameID);
+		if (scrollAnimationFrameID) cancelAnimationFrame(scrollAnimationFrameID);
+	});
 
 	return virtualList;
 }
