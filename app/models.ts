@@ -37,15 +37,38 @@ export function makeModels(amount = 9999) {
 	return result;
 }
 
-export function randomlyChangeModels(get: Model[], set: Setter<Model[]>, intervalMs: number): number {
+export function randomlyChangeModels(
+	get: Model[],
+	set: Setter<Model[]>,
+	intervalMs: number,
+	indexGenerator?: Generator<number>
+): number {
+	const length = get.length;
+	// Default to random generator if not provided
+	const generator = indexGenerator ?? randomIndexGenerator(length);
 	return setInterval(() => {
-		const index = Math.round(Math.random() * (get.length - 1));
+		const { value: index } = generator.next();
 		// @ts-ignore
 		set(index, (model: Model) => ({
-			// ...model,
 			description: getRandomDescription(),
 			title: `Item ${index} changed ${model.count + 1}`,
 			count: model.count + 1
 		}));
 	}, intervalMs);
+}
+
+/** Yields random indices in [0, length-1] forever */
+export function* randomIndexGenerator(length: number): Generator<number> {
+	while (true) {
+		yield Math.floor(Math.random() * length);
+	}
+}
+
+/** Yields indices 0,1,2,...,length-1,0,1,... forever */
+export function* incrementalIndexGenerator(length: number): Generator<number> {
+	let i = 0;
+	while (true) {
+		yield i;
+		i = (i + 1) % length;
+	}
 }

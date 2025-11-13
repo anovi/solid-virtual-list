@@ -81,7 +81,7 @@ button:focus-visible {
 /* Virtual list */
 .virtualList {
 	--padding: 5px;
-	height: 400px;
+	height: 80vh;
 	width: 260px;
 	overflow: hidden auto;
 	background: #f1f1f1;

@@ -3,6 +3,7 @@ import { A } from "@solidjs/router";
 export function Head() {
 	return <div class="head">
 		<nav>
+			<strong>Examples:</strong>
 			<A href='/'>Simple</A>
 			<A href='/variable'>Variable height</A>
 		</nav>
