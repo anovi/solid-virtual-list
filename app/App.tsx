@@ -11,13 +11,13 @@ function App() {
 			return <div class="virtualList__item" ref={ref}>{item.title}</div>
 		},
 		itemHeight: 30,
-		renderBeyondFold: 0,
+		renderBeyondFold: 100,
 	});
 
 	return (
 		<Virtual.Root class="virtualList" >
 			Some content inside virtual list container
-			<Virtual.Scroller />
+			<Virtual.Content />
 		</Virtual.Root>
 	);
 }

@@ -1,6 +1,5 @@
-/* eslint-disable complexity */
-import type { Accessor, JSX, JSXElement, ComponentProps, Context, ContextProviderComponent } from 'solid-js';
-import { createContext, createMemo, createRoot, createSignal, onCleanup, onMount, splitProps, useContext } from 'solid-js';
+import type { Accessor, JSX, JSXElement, ComponentProps } from 'solid-js';
+import { createContext, createMemo, createRoot, createSignal, onCleanup, onMount, useContext } from 'solid-js';
 
 
 /** REQUIREMENTS
@@ -86,27 +85,13 @@ const ScrollState = {
 
 export interface VirtualList {
 	/**
-	 * Items render memo.
-	 * It rerenders every time, when scroll position, window size, or models list changes.
+	 * Root scrollable element of virtual list. Should have restricted height and `position: relative`.
 	 */
-	items: Accessor<JSXElement>;
+	Root: (props: JSX.HTMLAttributes<HTMLDivElement>) => JSX.Element,
 	/**
-	 * Items wrapper top positoin. Items should be wrapped in element with absolute positioning
-	 * and top property assigned from this getter.
-	 */
-	itemsWrapperTop: Accessor<number>,
-	/**
-	 * Height of the spacer element that makes srollable wrapper to have a scroll.
-	 */
-	height: Accessor<number>,
-	/**
-	 * Onces scrollable element is rendered, pass it to this callback.
-	 */
-	scrollElem: (elem: HTMLElement) => void,
-
-	Root: (props: ComponentProps<'div'>) => JSX.Element,
-
-	Scroller: typeof Scroller;
+	 * Content element
+	*/
+	Content: (props: JSX.HTMLAttributes<HTMLDivElement>) => JSX.Element;
 }
 
 /**
@@ -138,6 +123,7 @@ export function createVirtualList<Model extends object>(params: {
 	// Measurements
 	const itemsHeights = new WeakMap<Model, number>();
 	const [scrollTop, setScrollTop] = createSignal<number>(0);
+	const [contentOffsetTop, setContentOffsetTop] = createSignal<number>(0);
 	const [height, setHeight] = createSignal<number>(0);
 	const [viewportHeight, setViewportHeight] = createSignal<number>(0);
 	let itemMarginTop: number;
@@ -150,10 +136,6 @@ export function createVirtualList<Model extends object>(params: {
 
 	const itemsToMeasure = new Map<Model, HTMLElement>();
 	let measureAnimationFrameID = -1;
-
-	onMount(() => {
-		measureContainer();
-	})
 
 	function measure() {
 		const nonMeasured = itemsToMeasure.size;
@@ -232,6 +214,7 @@ export function createVirtualList<Model extends object>(params: {
 		const delta = scrollElem.scrollTop - scrollTop();
 		setScrollTop(scrollElem.scrollTop);
 		setViewportHeight(scrollElem.clientHeight);
+		setContentOffsetTop(context.contentElem.offsetTop);
 		if (delta !== 0) {
 			scrollState = delta > 0 ? ScrollState.DOWN : ScrollState.UP;
 		} else {
@@ -267,8 +250,8 @@ export function createVirtualList<Model extends object>(params: {
                 const itemTop = itemsHeightCompounded;
 				const itemHeight = getItemHeight(item);
 
-				const posFrom = itemsHeightCompounded;
-				const posTo = itemsHeightCompounded + itemHeight;
+				const posFrom = contentOffsetTop() + itemsHeightCompounded;
+				const posTo = contentOffsetTop() + itemsHeightCompounded + itemHeight;
 				const viewPortTop = fromTop - offset; // offset adds reserved items above viewport
 				const viewPortBottom = fromTop + viewportHeight() + offset; // offset adds reserved items below viewport
 
@@ -326,21 +309,27 @@ export function createVirtualList<Model extends object>(params: {
         }
     );
 
-	const virtualList: VirtualList = {
-		items: itemsMemo,
+	const context: VirtualContextValue = {
 		height,
-		scrollElem: setScrollElem,
+		items: itemsMemo,
 		itemsWrapperTop,
+		contentElem: undefined as any,
+		onContentMount() {
+			measureContainer();
+		},
+	};
+
+	const virtualList: VirtualList = {
 		Root: (props: ComponentProps<'div'>) => {
 			return (
-				<VirtualContext.Provider value={{ height, items: itemsMemo, itemsWrapperTop }}>
-					<div {...props} ref={setScrollElem}>
+				<VirtualContext.Provider value={context}>
+					<div {...props} ref={setScrollElem} style={{ position: 'relative' }}>
 						{props.children}
 					</div>
 				</VirtualContext.Provider>
 			);
 		},
-		Scroller,
+		Content,
 	}
 
 	onCleanup(() => {
@@ -351,10 +340,15 @@ export function createVirtualList<Model extends object>(params: {
 	return virtualList;
 }
 
-export function Scroller(props: ComponentProps<'div'>) {
+export function Content(props: ComponentProps<'div'>) {
 	const context = useContext(VirtualContext);
+	let contentElem!: HTMLDivElement;
+	onMount(() => {
+		context.contentElem = contentElem;
+		context.onContentMount();
+	});
 	return (
-		<div {...props} style={{ height: `${context.height()}px`, position: 'relative' }}>
+		<div {...props} style={{ height: `${context.height()}px`, position: 'relative' }} ref={contentElem}>
 			<div style={{
 				position: 'absolute',
 				top: context.itemsWrapperTop() + 'px',
@@ -367,8 +361,18 @@ export function Scroller(props: ComponentProps<'div'>) {
 	);
 }
 
-const VirtualContext = createContext<{
+type VirtualContextValue = {
 	height: Accessor<number>,
-	items: Accessor<JSXElement>;
+	items: Accessor<JSXElement>,
 	itemsWrapperTop: Accessor<number>,
-}>({ height: () => 0, items: () => undefined, itemsWrapperTop: () => 0 });
+	contentElem: HTMLElement,
+	onContentMount: () => void,
+};
+
+const VirtualContext = createContext<VirtualContextValue>({
+	height: undefined as any,
+	items: undefined as any,
+	itemsWrapperTop: undefined as any,
+	contentElem: undefined as any,
+	onContentMount: undefined as any,
+});
