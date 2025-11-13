@@ -1,49 +1,16 @@
-import { createEffect, createSignal } from 'solid-js';
-import { createStore } from 'solid-js/store';
+import { Route, Router } from "@solidjs/router";
 
-import { createVirtualList } from '../src/create-virtual'
-import { makeModels, randomlyChangeModels } from './models'
 import './App.css'
+import { Simple } from './simple';
+import { Variable } from './variable';
 
 
 function App() {
-	const [models, setModels] = createStore(makeModels(9999));
-	const [changeInterval, setChangeInterval] = createSignal(200);
-	let changeTimerID: number = -1;
-
-	createEffect(() => {
-		if (changeTimerID >= 0) clearInterval(changeTimerID);
-		changeTimerID = randomlyChangeModels(models, setModels, changeInterval());
-	});
-
-	const Virtual = createVirtualList({
-		models: () => models,
-		getElement: (item, _index, ref) => {
-			return <div class="virtualList__item" ref={ref}>{item.title}</div>
-		},
-		itemHeight: 30,
-		renderBeyondFold: 100,
-	});
-
 	return (
-		<div class="grid">
-			<div class="grid__list">
-				<Virtual.Root class="virtualList">
-					Some content inside virtual list container
-					<Virtual.Content />
-				</Virtual.Root>
-			</div>
-			<div class="grid__controls">
-				<label for="speed">Randomly change models every:</label><br />
-				<input type="range" id="speed" name="speed" min="25" max="1000" value={changeInterval()} onInput={(e) => {
-					const val = Number.parseInt(e.target.value);
-					if (!Number.isNaN(val)) {
-						setChangeInterval(val);
-					}
-				}} />
-				<span>{changeInterval()} ms</span>
-			</div>
-		</div>
+		<Router>
+            <Route path="/" component={Simple} />
+            <Route path="/variable" component={Variable} />
+        </Router>
 	);
 }
 

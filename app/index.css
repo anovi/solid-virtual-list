@@ -13,6 +13,10 @@
 	-moz-osx-font-smoothing: grayscale;
 }
 
+* {
+	box-sizing: border-box;
+}
+
 a {
 	font-weight: 500;
 	color: #646cff;
@@ -67,6 +71,13 @@ button:focus-visible {
 	}
 }
 
+/* Head */
+.head nav {
+	padding: 1rem 0;
+	display: flex;
+	gap: 1em;
+}
+
 /* Virtual list */
 .virtualList {
 	height: 400px;
@@ -77,10 +88,16 @@ button:focus-visible {
 }
 
 .virtualList__item {
-	box-sizing: border-box;
-	height: 30px;
 	text-align: left;
 	padding: 5px;
+}
+.virtualList__item.virtualList__item--fixed {
+	height: 30px;
+}
+.virtualList__itemTitle {
+	font-weight: 600;
+}
+.virtualList__itemDescription {
 }
 
 /* Grid */

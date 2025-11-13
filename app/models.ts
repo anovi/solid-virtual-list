@@ -6,12 +6,31 @@ export type Model = {
 	count: number;
 }
 
+const LOREM_IPSUM = `
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed non risus. Suspendisse lectus tortor, dignissim sit amet, adipiscing nec, ultricies sed, dolor. Cras elementum ultrices diam. Maecenas ligula massa, varius a, semper congue, euismod non, mi. Proin porttitor, orci nec nonummy molestie, enim est eleifend mi, non fermentum diam nisl sit amet erat. Duis semper. Duis arcu massa, scelerisque vitae, consequat in, pretium a, enim. Pellentesque congue. Ut in risus volutpat libero pharetra tempor. Cras vestibulum bibendum augue. Praesent egestas leo in pede. Praesent blandit odio eu enim. Pellentesque sed dui ut augue blandit sodales. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Aliquam nibh. Mauris ac mauris sed pede pellentesque fermentum. Maecenas adipiscing ante non diam sodales hendrerit.
+`;
+
+function getRandomDescription(): string {
+	const sentences = LOREM_IPSUM
+		.replace(/\n/g, " ")
+		.split(". ")
+		.map(s => s.trim())
+		.filter(Boolean)
+		.map(s => s.endsWith('.') ? s : s + '.');
+	const count = Math.floor(Math.random() * 5) + 1; // 1 to 5 sentences
+	const shuffled = sentences
+		.map(value => ({ value, sort: Math.random() }))
+		.sort((a, b) => a.sort - b.sort)
+		.map(({ value }) => value);
+	return shuffled.slice(0, count).join(" ");
+}
+
 export function makeModels(amount = 9999) {
 	const result: Model[] = [];
 	for (let index = 0; index < amount; index++) {
 		result.push({
 			title: `Item ${index}`,
-			description: '',
+			description: getRandomDescription(),
 			count: 0,
 		});
 	}
@@ -23,7 +42,8 @@ export function randomlyChangeModels(get: Model[], set: Setter<Model[]>, interva
 		const index = Math.round(Math.random() * (get.length - 1));
 		// @ts-ignore
 		set(index, (model: Model) => ({
-			...model,
+			// ...model,
+			description: getRandomDescription(),
 			title: `Item ${index} changed ${model.count + 1}`,
 			count: model.count + 1
 		}));
