@@ -80,16 +80,20 @@ button:focus-visible {
 
 /* Virtual list */
 .virtualList {
+	--padding: 5px;
 	height: 400px;
 	width: 260px;
 	overflow: hidden auto;
-	background: #eeeeee;
+	background: #f1f1f1;
 	position: relative;
+	border-radius: 10px;
 }
-
+.virtualList__description {
+	padding: var(--padding);
+}
 .virtualList__item {
 	text-align: left;
-	padding: 5px;
+	padding: var(--padding);
 }
 .virtualList__item.virtualList__item--fixed {
 	height: 30px;
@@ -97,12 +101,17 @@ button:focus-visible {
 .virtualList__itemTitle {
 	font-weight: 600;
 }
-.virtualList__itemDescription {
-}
+.virtualList__itemDescription {}
 
 /* Grid */
 .grid {
 	display: grid;
 	grid-template-columns: max-content auto;
 	gap: 20px;
+}
+
+pre {
+	box-shadow: inset 0 0 0 1px rgb(221, 221, 221);
+	padding: 8px 12px;
+	border-radius: 8px;
 }

@@ -36,13 +36,12 @@ export function Variable() {
 		<div class="grid">
 			<div class="grid__list">
 				<Virtual.Root class="virtualList">
-					Some content inside virtual list container
 					<Virtual.Content />
 				</Virtual.Root>
 			</div>
 			<div class="grid__controls">
 				<div>There are <strong>{amout()}</strong> models.</div>
-				<label for="speed">Randomly change models every:</label><br />
+				<label for="speed">Change a random model every:</label><br />
 				<input type="range" id="speed" name="speed" min="25" max="1000" value={changeInterval()} onInput={(e) => {
 					const val = Number.parseInt(e.target.value);
 					if (!Number.isNaN(val)) {
@@ -50,6 +49,9 @@ export function Variable() {
 					}
 				}} />
 				<span>{changeInterval()} ms</span>
+				<div>
+					<p>Iitems have variable height. At specified interval, the title and description of a randomly chosen model is updated. So the resulting item height changes. The virtual list handles theese changes by making mesurements and asjusting scroll position.</p>
+				</div>
 			</div>
 		</div>
 		</>
