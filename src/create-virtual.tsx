@@ -1,6 +1,6 @@
 /* eslint-disable complexity */
-import type { Accessor, JSX, JSXElement } from 'solid-js';
-import { createMemo, createRoot, createSignal, onCleanup, onMount } from 'solid-js';
+import type { Accessor, JSX, JSXElement, ComponentProps, Context, ContextProviderComponent } from 'solid-js';
+import { createContext, createMemo, createRoot, createSignal, onCleanup, onMount, splitProps, useContext } from 'solid-js';
 
 
 /** REQUIREMENTS
@@ -78,11 +78,11 @@ interface RenderedItem<Model> {
     dispose: () => void;
 }
 
-enum ScrollState {
-	IDLE = 1,
-	DOWN = 2,
-	UP = 3,
-}
+const ScrollState = {
+	IDLE: 1,
+	DOWN: 2,
+	UP: 3,
+};
 
 export interface VirtualList {
 	/**
@@ -103,6 +103,10 @@ export interface VirtualList {
 	 * Onces scrollable element is rendered, pass it to this callback.
 	 */
 	scrollElem: (elem: HTMLElement) => void,
+
+	Root: (props: ComponentProps<'div'>) => JSX.Element,
+
+	Scroller: typeof Scroller;
 }
 
 /**
@@ -221,7 +225,7 @@ export function createVirtualList<Model extends object>(params: {
 	}
     let scrollElem: HTMLElement;
     let scrollAnimationFrameID = -1;
-    let scrollState: ScrollState = ScrollState.IDLE;
+    let scrollState: number = ScrollState.IDLE;
 	let ticking = false;
 
 	function measureContainer() {
@@ -263,12 +267,13 @@ export function createVirtualList<Model extends object>(params: {
                 const itemTop = itemsHeightCompounded;
 				const itemHeight = getItemHeight(item);
 
-                if (!shouldRender(
-					itemsHeightCompounded,
-					itemsHeightCompounded + itemHeight,
-					fromTop - offset, // offset adds reserved items above viewport
-					fromTop + viewportHeight() + offset // offset adds reserved items below viewport
-				)) {
+				const posFrom = itemsHeightCompounded;
+				const posTo = itemsHeightCompounded + itemHeight;
+				const viewPortTop = fromTop - offset; // offset adds reserved items above viewport
+				const viewPortBottom = fromTop + viewportHeight() + offset; // offset adds reserved items below viewport
+
+				// Item will be rendered, when its top or bottom edge whithin vieport
+                if (!(posFrom < viewPortBottom && posTo > viewPortTop)) {
 					itemsHeightCompounded += itemHeight;
 					continue;
 				}
@@ -326,6 +331,16 @@ export function createVirtualList<Model extends object>(params: {
 		height,
 		scrollElem: setScrollElem,
 		itemsWrapperTop,
+		Root: (props: ComponentProps<'div'>) => {
+			return (
+				<VirtualContext.Provider value={{ height, items: itemsMemo, itemsWrapperTop }}>
+					<div {...props} ref={setScrollElem}>
+						{props.children}
+					</div>
+				</VirtualContext.Provider>
+			);
+		},
+		Scroller,
 	}
 
 	onCleanup(() => {
@@ -336,89 +351,24 @@ export function createVirtualList<Model extends object>(params: {
 	return virtualList;
 }
 
-function shouldRender(posFrom: number, posTo: number, viewPortTop: number, viewPortBottom: number) {
-    return posFrom < viewPortBottom && posTo > viewPortTop;
+export function Scroller(props: ComponentProps<'div'>) {
+	const context = useContext(VirtualContext);
+	return (
+		<div {...props} style={{ height: `${context.height()}px`, position: 'relative' }}>
+			<div style={{
+				position: 'absolute',
+				top: context.itemsWrapperTop() + 'px',
+				right: 0,
+				left: 0
+			}}>
+				{context.items()}
+			</div>
+		</div>
+	);
 }
 
-
-
-type ScrollTarget = Window | Document | Element;
-
-interface OnScrollEndOptions {
-	/** How long (ms) position must stay unchanged to count as "stopped". Default: 120 */
-	quietMs?: number;
-	/** Optional AbortSignal to auto-cleanup. */
-	signal?: AbortSignal;
-	onStartScroll?: () => void;
-	onScroll?: () => void,
-}
-
-/**
-* Listen for scrolling to stop on a target and run `cb`.
-* Returns a cleanup function.
-*/
-export function onScrollEnd(
-	target: ScrollTarget = window,
-	scrollEndCb: () => void,
-	options: OnScrollEndOptions = {},
-): () => void {
-	const { quietMs = 120, signal } = options;
-	const isWinLike = target === window || target === document || target === document.scrollingElement;
-	
-	const getPos = (): number => isWinLike
-		? (window.scrollY || document.documentElement.scrollTop || 0)
-		: (target as Element).scrollTop;
-	
-	let rafId: number | null = null;
-	let lastPos = getPos();
-	let lastChange = performance.now();
-	let running = false;
-	
-	const loop = () => {
-		const now = performance.now();
-		const pos = getPos();
-		// if (options.onStartScroll) options.onStartScroll(); // experiment
-		if (pos !== lastPos) {
-			if (options.onScroll) options.onScroll(); // experiment
-			lastPos = pos;
-			lastChange = now;
-		}
-		if (now - lastChange >= quietMs) {
-			running = false;
-			rafId = null;
-			scrollEndCb(); // scrolling stopped
-			return;
-		}
-		rafId = requestAnimationFrame(loop);
-	};
-	
-	const onScroll = () => {
-		if (!running) {
-			running = true;
-			lastPos = getPos();
-			lastChange = performance.now();
-			rafId = requestAnimationFrame(loop);
-		}
-	};
-	
-	// NB: passive for perf; Element/Window both accept it
-	const opts: AddEventListenerOptions = { passive: true };
-	const eventTarget: EventTarget =
-	isWinLike ? window : (target as Element);
-	
-	eventTarget.addEventListener('scroll', onScroll, opts);
-	
-	const cleanup = () => {
-		eventTarget.removeEventListener('scroll', onScroll, opts);
-		if (rafId != null) cancelAnimationFrame(rafId);
-	};
-	
-	if (signal) {
-		if (signal.aborted) cleanup();
-		else signal.addEventListener('abort', cleanup, { once: true });
-	}
-	
-	return cleanup;
-}
-
-
+const VirtualContext = createContext<{
+	height: Accessor<number>,
+	items: Accessor<JSXElement>;
+	itemsWrapperTop: Accessor<number>,
+}>({ height: () => 0, items: () => undefined, itemsWrapperTop: () => 0 });
