@@ -70,12 +70,15 @@ button:focus-visible {
 
 .virtualList {
 	height: 400px;
-	width: 200px;
+	width: 260px;
 	overflow: hidden auto;
 	background: #eeeeee;
 	position: relative;
 }
 
 .virtualList__item {
+	box-sizing: border-box;
 	height: 30px;
+	text-align: left;
+	padding: 5px;
 }

@@ -1,10 +1,15 @@
-import './App.css'
+import { createStore } from 'solid-js/store';
+
 import { createVirtualList } from '../src/create-virtual'
-import { makeModels } from './models'
+import { makeModels, randomlyChangeModels } from './models'
+import './App.css'
 
 
 function App() {
-	const models = makeModels();
+	const [models, setModels] = createStore(makeModels(9999));
+
+	randomlyChangeModels(models, setModels, 20);
+
 	const Virtual = createVirtualList({
 		models: () => models,
 		getElement: (item, _index, ref) => {
@@ -15,7 +20,7 @@ function App() {
 	});
 
 	return (
-		<Virtual.Root class="virtualList" >
+		<Virtual.Root class="virtualList">
 			Some content inside virtual list container
 			<Virtual.Content />
 		</Virtual.Root>
