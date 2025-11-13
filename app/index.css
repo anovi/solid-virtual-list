@@ -24,7 +24,7 @@ a:hover {
 
 body {
 	margin: 0;
-	display: flex;
+	/* display: flex; */
 	place-items: center;
 	min-width: 320px;
 	min-height: 100vh;
@@ -67,7 +67,7 @@ button:focus-visible {
 	}
 }
 
-
+/* Virtual list */
 .virtualList {
 	height: 400px;
 	width: 260px;
@@ -81,4 +81,11 @@ button:focus-visible {
 	height: 30px;
 	text-align: left;
 	padding: 5px;
+}
+
+/* Grid */
+.grid {
+	display: grid;
+	grid-template-columns: max-content auto;
+	gap: 20px;
 }

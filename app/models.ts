@@ -18,8 +18,8 @@ export function makeModels(amount = 9999) {
 	return result;
 }
 
-export function randomlyChangeModels(get: Model[], set: Setter<Model[]>, intervalMs: number): void {
-	setInterval(() => {
+export function randomlyChangeModels(get: Model[], set: Setter<Model[]>, intervalMs: number): number {
+	return setInterval(() => {
 		const index = Math.round(Math.random() * (get.length - 1));
 		// @ts-ignore
 		set(index, (model: Model) => ({
