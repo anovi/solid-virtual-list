@@ -20,7 +20,7 @@ export function Simple() {
 
 	const Virtual = createVirtualList({
 		models: () => models,
-		getElement: (item, _index, ref) => {
+		itemComponent: (item, _index, ref) => {
 			return <div class="virtualList__item" ref={ref}>{item.title}</div>
 		},
 		itemHeight: 30,

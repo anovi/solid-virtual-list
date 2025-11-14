@@ -30,7 +30,7 @@ export function Variable() {
 
 	const Virtual = createVirtualList({
 		models: () => models,
-		getElement: (item, _index, ref) => {
+		itemComponent: (item, _index, ref) => {
 			return <div class="virtualList__item" ref={ref}>
 				<div class="virtualList__itemTitle">{item.title}</div>
 				<div class="virtualList__itemDescription">{item.description}</div>				

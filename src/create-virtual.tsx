@@ -1,74 +1,17 @@
-import type { Accessor, JSX, JSXElement, ComponentProps } from 'solid-js';
+import type { Accessor, JSX, JSXElement, ComponentProps, Signal, } from 'solid-js';
 import { createContext, createMemo, createRoot, createSignal, onCleanup, onMount, useContext } from 'solid-js';
 
 
-/** REQUIREMENTS
- * - [ ] track window resizing
- * - [ ] track container size changes
- * - [x] track model changes
- * - [x] remember collapsed items (though it may not be its responsibility, but parent's)
- * - [x] handle instant change of scroll position (for example scroll to a sertain item);
- * 		 or start positioning at the first render
-*/
-
-
-/** VIRTUAL LIST ITEMSM RENDERING
- * 
- * ## ⬇️ SCROLL DOWN
- * 
- * | Item 1       |     | Item 1       |
- * | Item 2       |     | Item 2       |
- * | Item 3       |     | Item 3       |
- * ----VIEWPORT----     | Item 4       |
- * | Item 4       |     ----VIEWPORT----
- * | Item 5       |     | Item 5       |
- * | Item 6       |     | Item 6       |
- * | Item 7       |     | Item 7       |
- * | Item 8       |     | Item 8       |
- * | Item 9       |     | Item 9       |
- * ----------------     | Item 10      |
- * | Item 10      |     ----------------
- * | Item 11      |     | Item 11      |
- * | Item 12      |     | Item 12      |
- * 
- * Item 4 should be removed
- * Item 10 should be added
- * 
- * ## ⬆️ SCROLL UP
- * 
- * | Item 1       |     | Item 1       |
- * | Item 2       |     | Item 2       |
- * | Item 3       |     ----VIEWPORT----
- * ----VIEWPORT----     | Item 3       |
- * | Item 4       |     | Item 4       |
- * | Item 5       |     | Item 5       |
- * | Item 6       |     | Item 6       |
- * | Item 7       |     | Item 7       |
- * | Item 8       |     | Item 8       |
- * | Item 9       |     ----------------
- * ----------------     | Item 9       |
- * | Item 10      |     | Item 10      |
- * | Item 11      |     | Item 11      |
- * | Item 12      |     | Item 12      |
- * 
- * I need:
- * - The height of the viewport
- * - The height of the items
- * - The scroll position
- * - The items models
- * 
- * 🟢 On update:
- * 1. Calculate the delta of scroll position
- * 2. Detect if the items has changed
- * 3. Detect if the viewport has changed
- * 4. Calculate the new range of items to render
- * 5. Loop through the items:
- *   - If the item is in the range, check if it was rendered before,
- *     if it was, check the model, if it's the same, reuse the element
- *   - if it's different, create a new element; dispose the old one
- * 
- */
-
+export interface VirtualList {
+	/**
+	 * Root scrollable element of virtual list. Should have restricted height and `position: relative`.
+	 */
+	Root: (props: JSX.HTMLAttributes<HTMLDivElement>) => JSX.Element,
+	/**
+	 * Content element of virtual list. Put it as a child of Root element, among with other content (if needed).
+	*/
+	Content: (props: JSX.HTMLAttributes<HTMLDivElement>) => JSX.Element;
+}
 
 /** Memorized rendererd item */
 interface RenderedItem<Model> {
@@ -83,16 +26,15 @@ const ScrollState = {
 	UP: 3,
 };
 
-export interface VirtualList {
-	/**
-	 * Root scrollable element of virtual list. Should have restricted height and `position: relative`.
-	 */
-	Root: (props: JSX.HTMLAttributes<HTMLDivElement>) => JSX.Element,
-	/**
-	 * Content element
-	*/
-	Content: (props: JSX.HTMLAttributes<HTMLDivElement>) => JSX.Element;
-}
+type VirtualContextValue = {
+	contentHeight: Accessor<number>,
+	items: Accessor<JSXElement>,
+	itemsWrapperTop: Accessor<number>,
+	contentElem: HTMLElement,
+	onContentMount: (el: HTMLElement) => void,
+};
+
+const VirtualContext = createContext<VirtualContextValue>(undefined);
 
 /**
  * Creates virtual list.
@@ -100,41 +42,185 @@ export interface VirtualList {
 export function createVirtualList<Model extends object>(params: {
     models: Accessor<Model[]>,
     itemHeight?: number,
-	itemMargins?: { top?: number, bottom?: number}
 	expectedItemHeight?: number,
 	/**
 	 * How much content (in pixels) to render beyond viewport.
 	 * Useful to avoid glitches while scrolling fast.
 	*/
 	renderBeyondFold?: number,
-    getElement: (item: Model, index: number, ref: (elem: HTMLElement) => void) => JSX.Element
+	/**
+	 * In order 
+	 * Useful to avoid glitches while scrolling fast.
+	*/
+    itemComponent: (item: Model, index: number, ref: (elem: HTMLElement) => void) => JSX.Element
 }) { 
-	const {
-		models,
-		itemHeight,
-		getElement,
-	} = params;
-	const expectedItemHeight = params.expectedItemHeight || 35;
-	const offset = params.renderBeyondFold || 0;
+	const { models, itemComponent } = params;
+	const defaultItemHeight = params.itemHeight || params.expectedItemHeight || 35;
+	const renderingBufferSize = params.renderBeyondFold || 0;
+	const Scroll = trackScroll();
+	
+    // Cache of previous rendered items: recreated at each cycle
+    let renderedItems: Map<Model, RenderedItem<Model>> = new Map();
 
-    // Cache of previous items
-    let cache: Map<Model, RenderedItem<Model>> = new Map();
+	// Created if items has no fixed height: `itemHeight` param is not present
+	let measurer: ReturnType<typeof createItemsMeasusrer>|undefined;
 
-	// Measurements
+	// Output signals for Content component for sizing the content box and positioning items inside it.
+	const [contentHeight, setContentHeight] = createSignal<number>(0);
+	const [itemsWrapperTop, setItemsWrapperTop] = createSignal(0);
+
+    const itemsMemo = createMemo<JSXElement[]>(
+        () => {
+			const items: JSXElement[] = [];
+
+            // Cache of current cycle
+            const modelsItems = models();
+            const currentCache: Map<Model, RenderedItem<Model>> = new Map();
+            const fromTop = Scroll.scrollTop();
+            
+            let itemsHeightCompounded = 0;
+			let firstRenderedItemTop = -1;
+
+            for (let index = 0; index < modelsItems.length; index++) {
+                const item = modelsItems[index];
+                const itemTop = itemsHeightCompounded;
+				// Get item height: fixed OR measured OR expected size
+				const curItemHeight = measurer && measurer.has(item) ? measurer.get(item)! : defaultItemHeight;
+
+				const posFrom = Scroll.contentOffsetTop() + itemsHeightCompounded;
+				const posTo = Scroll.contentOffsetTop() + itemsHeightCompounded + curItemHeight;
+				const viewPortTop = fromTop - renderingBufferSize; // offset adds reserved items above viewport
+				const viewPortBottom = fromTop + Scroll.viewportHeight() + renderingBufferSize; // offset adds reserved items below viewport
+
+				// Item will be rendered, when its top or bottom edge whithin vieport
+                if (!(posFrom < viewPortBottom && posTo > viewPortTop)) {
+					itemsHeightCompounded += curItemHeight;
+					continue;
+				}
+				itemsHeightCompounded += curItemHeight;
+
+                //⬇️ BELOW: Items that will actually be rendered.
+				
+                if (firstRenderedItemTop < 0) firstRenderedItemTop = itemTop;
+                let node: JSXElement;
+
+                // Check if element will be reused or rerendered
+                if (renderedItems.has(item)) {
+                    currentCache.set(item, renderedItems.get(item)!)
+                    node = renderedItems.get(item)!.element;
+					renderedItems.delete(item); // so it will not be disposed
+                } else {
+                    node = createRoot((dispose) => {
+                        // new item
+                        currentCache.set(item, {
+                            model: item,
+                            element: null,
+                            dispose: dispose,
+                        });
+                        return itemComponent(item, index, (el) => {
+							if (measurer && !measurer.has(item)) {
+								measurer.scheduleMesure(item, el);
+							}
+						});
+                    });
+                    currentCache.get(item)!.element = node;
+                }
+                items.push(node);
+            }
+
+            // Dispose previously rendered items that not reused
+            for (const [key, item] of renderedItems) {
+                item.dispose();
+                renderedItems.delete(key);
+            }
+
+            // Update cache
+            renderedItems = currentCache;
+
+			// Triggers DOM updates
+			setContentHeight(itemsHeightCompounded);
+			setItemsWrapperTop(firstRenderedItemTop);
+
+			return items;
+        }
+    );
+
+	const context: VirtualContextValue = {
+		contentHeight,
+		items: itemsMemo,
+		itemsWrapperTop,
+		contentElem: undefined as any,
+		onContentMount(el) {
+			Scroll.setContentElement(el);
+			Scroll.measureContainer();
+		},
+	};
+
+	// Outer container (scrollable) of virtual list
+	function onContainerMounted(el: HTMLElement) {
+		Scroll.setScrollElem(el);
+		if (params.itemHeight === undefined) {
+			// When measuring of items height is required
+			measurer = createItemsMeasusrer(Scroll.scrollTop, [contentHeight, setContentHeight], el, defaultItemHeight);
+		}
+	}
+
+	return {
+		Root: (props: ComponentProps<'div'>) => {
+			return (
+				<VirtualContext.Provider value={context}>
+					<div {...props} ref={onContainerMounted} style={{ position: 'relative' }}>
+						{props.children}
+					</div>
+				</VirtualContext.Provider>
+			);
+		},
+		Content,
+	};
+}
+
+
+/**
+ * Content component
+ */
+export function Content(props: ComponentProps<'div'>) {
+	const context = useContext(VirtualContext);
+	if (!context) throw Error(`Virtual list "Content" component is outside of "Root" component. Make sure that "Content" is a child or "Root".`)
+	let contentElem!: HTMLDivElement;
+	onMount(() => {
+		context.contentElem = contentElem;
+		context.onContentMount(contentElem);
+	});
+	return (
+		<div {...props} style={{ height: `${context.contentHeight()}px`, position: 'relative' }} ref={contentElem}>
+			<div style={{
+				position: 'absolute',
+				top: context.itemsWrapperTop() + 'px',
+				right: 0,
+				left: 0
+			}}>
+				{context.items()}
+			</div>
+		</div>
+	);
+}
+
+
+/**
+ * Measuremens for items in case when items have variable heights.
+ */
+function createItemsMeasusrer<Model extends object>(
+	scrollTop: Accessor<number>,
+	heightSig: Signal<number>,
+	scrollElem: HTMLElement,
+	expectedItemHeight: number,
+) {
 	const itemsHeights = new WeakMap<Model, number>();
-	const [scrollTop, setScrollTop] = createSignal<number>(0);
-	const [contentOffsetTop, setContentOffsetTop] = createSignal<number>(0);
-	const [height, setHeight] = createSignal<number>(0);
-	const [viewportHeight, setViewportHeight] = createSignal<number>(0);
-	let itemMarginTop: number;
-
-	const getItemHeight = (typeof itemHeight === 'number')
-		? () => itemHeight
-		: (model: Model) => {
-			return itemsHeights.has(model) ? itemsHeights.get(model)! : expectedItemHeight;
-		};
-
 	const itemsToMeasure = new Map<Model, HTMLElement>();
+	const setHeight = heightSig[1];
+	const height = heightSig[0];
+	let itemMarginTop: number;
+	let firstVisibleItemToMeasure: Model|undefined = undefined;
 	let measureAnimationFrameID = -1;
 
 	function measure() {
@@ -142,6 +228,7 @@ export function createVirtualList<Model extends object>(params: {
 		let compoundMeasuredHeight = 0;
 		let newItemMarginValue = 0;
 		let firstWithMargin: HTMLElement|null = null;
+		// console.group('Measuring', itemsToMeasure.size)
 		itemsToMeasure.forEach((elem, model) => {
 			const height = elem.getBoundingClientRect().height;
 			if (itemMarginTop === undefined) {
@@ -155,9 +242,11 @@ export function createVirtualList<Model extends object>(params: {
 					firstWithMargin = elem;
 				}
 			}
+			if (firstVisibleItemToMeasure === model) firstVisibleItemToMeasure = undefined;
 			compoundMeasuredHeight += (itemMarginTop || 0) + height;
 			itemsHeights.set(model, (itemMarginTop || 0) + height);
-		})
+			// console.log((itemMarginTop || 0) + height)
+		});
 		if (!itemMarginTop) itemMarginTop = 0;
 		if (newItemMarginValue && firstWithMargin) {
 			// (B) Now we need to add margin to the fist measured elements
@@ -167,11 +256,18 @@ export function createVirtualList<Model extends object>(params: {
 				itemsHeights.set(model, itemsHeights.get(model)! + itemMarginTop);
 			}
 		}
+		// console.groupEnd()
 		measureAnimationFrameID = -1;
 		itemsToMeasure.clear();
-	
-		if (!itemHeight && scrollState === ScrollState.UP && nonMeasured > 0)
-			ajustAfterRenderingNonMeasuredItemsAbove(nonMeasured, compoundMeasuredHeight);
+		firstVisibleItemToMeasure = undefined;
+		
+		// FIXME: the problem with `compoundMeasuredHeight` is that during the scroll,
+		// an item whithin the viewport will be updated and it will be measured, so its
+		// height will be added to `compoundMeasuredHeight` which makes an ajustment wrong
+		if ( /* scrollState === ScrollState.UP && */ nonMeasured > 0)
+			ajustAfterRenderingNonMeasuredItemsAbove(nonMeasured, compoundMeasuredHeight)
+		// else if (!itemHeight && nonMeasured > 0)
+		// 	ajustAfterRenderingNonMeasuredItemsAbove(nonMeasured, compoundMeasuredHeight)
 	}
 
 	// if scroll position started at the bottom, the items above not yet mesured.
@@ -192,29 +288,53 @@ export function createVirtualList<Model extends object>(params: {
 		setHeight(height() + heightDelta);
 	}
 
-	function scheduleMesure() {
-		if (itemsToMeasure.size === 0 || measureAnimationFrameID > -1) return;
+	function scheduleMesure(item: Model, el: HTMLElement) {
+		// Add to measuring
+		// console.log('TO measure', el)
+		itemsToMeasure.set(item, el);
+		if (!firstVisibleItemToMeasure) firstVisibleItemToMeasure = item;
 		queueMicrotask(() => {
 			if (itemsToMeasure.size === 0 || measureAnimationFrameID > -1) return;
 			measureAnimationFrameID = window.requestAnimationFrame(measure);
 		})
 	}
-	
-	/* Scroll tracking */
+
+	onCleanup(() => {
+		if (measureAnimationFrameID) cancelAnimationFrame(measureAnimationFrameID);
+	});
+
+	return {
+		scheduleMesure,
+		measure,
+		has: itemsHeights.has.bind(itemsHeights),
+		get: itemsHeights.get.bind(itemsHeights),
+	}
+}
+
+
+/**
+ * Tracks scroll of the container.
+ */
+function trackScroll () {
+	const [scrollTop, setScrollTop] = createSignal<number>(0);
+	const [viewportHeight, setViewportHeight] = createSignal<number>(0);
+	const [contentOffsetTop, setContentOffsetTop] = createSignal<number>(0);
+	let scrollElem: HTMLElement;
+	let contentElement: HTMLElement;
+    let scrollAnimationFrameID = -1;
+    let scrollState: number = ScrollState.IDLE; // TODO: why do I need this now?
+	let ticking = false;
+
 	function setScrollElem(elem: HTMLElement) {
 		scrollElem = elem;
 		elem.addEventListener('scroll', onScroll);
 	}
-    let scrollElem: HTMLElement;
-    let scrollAnimationFrameID = -1;
-    let scrollState: number = ScrollState.IDLE;
-	let ticking = false;
-
+    
 	function measureContainer() {
 		const delta = scrollElem.scrollTop - scrollTop();
 		setScrollTop(scrollElem.scrollTop);
 		setViewportHeight(scrollElem.clientHeight);
-		setContentOffsetTop(context.contentElem.offsetTop);
+		setContentOffsetTop(contentElement.offsetTop);
 		if (delta !== 0) {
 			scrollState = delta > 0 ? ScrollState.DOWN : ScrollState.UP;
 		} else {
@@ -230,149 +350,17 @@ export function createVirtualList<Model extends object>(params: {
         }
     }
 
-	const [itemsWrapperTop, setItemsWrapperTop] = createSignal(0);
-
-    const itemsMemo = createMemo<JSXElement[]>(
-        () => {
-			const items: JSXElement[] = [];
-
-            // Cache of current cycle
-            const modelsItems = models();
-            const currentCache: Map<Model, RenderedItem<Model>> = new Map();
-            const fromTop = scrollTop();
-            
-            let itemsHeightCompounded = 0;
-            let index = 0;
-			let topRenderedItem = -1;
-
-            for (index; index < modelsItems.length; index++) {
-                const item = modelsItems[index];
-                const itemTop = itemsHeightCompounded;
-				const itemHeight = getItemHeight(item);
-
-				const posFrom = contentOffsetTop() + itemsHeightCompounded;
-				const posTo = contentOffsetTop() + itemsHeightCompounded + itemHeight;
-				const viewPortTop = fromTop - offset; // offset adds reserved items above viewport
-				const viewPortBottom = fromTop + viewportHeight() + offset; // offset adds reserved items below viewport
-
-				// Item will be rendered, when its top or bottom edge whithin vieport
-                if (!(posFrom < viewPortBottom && posTo > viewPortTop)) {
-					itemsHeightCompounded += itemHeight;
-					continue;
-				}
-				itemsHeightCompounded += itemHeight;
-
-                //⬇️ BELOW: Items that will actually be rendered.
-				
-                if (topRenderedItem < 0) topRenderedItem = itemTop;
-                let node: JSXElement;
-
-                // Check if element will be reused or rerendered
-                if (cache.has(item)) {
-                    currentCache.set(item, cache.get(item)!)
-                    node = cache.get(item)!.element;
-					cache.delete(item); // so it's not disposed
-                } else {
-                    node = createRoot((dispose) => {
-                        // new item
-                        currentCache.set(item, {
-                            model: item,
-                            element: null,
-                            dispose: dispose,
-                        });
-                        return getElement(item, index, (el) => {
-							if (!itemsHeights.has(item)) {
-								// Add to measuring
-								itemsToMeasure.set(item, el);
-								scheduleMesure();
-							}
-						});
-                    });
-                    currentCache.get(item)!.element = node;
-                }
-                items.push(node);
-            }
-
-            // Dispose prev items that not reused
-            for (const [key, item] of cache) {
-                item.dispose();
-                cache.delete(key);
-            }
-
-            // Update caches
-            cache = currentCache;
-
-			setHeight(itemsHeightCompounded);
-			setItemsWrapperTop(topRenderedItem);
-
-			return items;
-        }
-    );
-
-	const context: VirtualContextValue = {
-		height,
-		items: itemsMemo,
-		itemsWrapperTop,
-		contentElem: undefined as any,
-		onContentMount() {
-			measureContainer();
-		},
-	};
-
-	const virtualList: VirtualList = {
-		Root: (props: ComponentProps<'div'>) => {
-			return (
-				<VirtualContext.Provider value={context}>
-					<div {...props} ref={setScrollElem} style={{ position: 'relative' }}>
-						{props.children}
-					</div>
-				</VirtualContext.Provider>
-			);
-		},
-		Content,
-	}
-
 	onCleanup(() => {
-		if (measureAnimationFrameID) cancelAnimationFrame(measureAnimationFrameID);
 		if (scrollAnimationFrameID) cancelAnimationFrame(scrollAnimationFrameID);
 	});
 
-	return virtualList;
+	return {
+		scrollTop,
+		viewportHeight,
+		contentOffsetTop,
+		setScrollElem,
+		setContentElement: (el: HTMLElement) => contentElement = el,
+		measureContainer,
+	}
+
 }
-
-export function Content(props: ComponentProps<'div'>) {
-	const context = useContext(VirtualContext);
-	let contentElem!: HTMLDivElement;
-	onMount(() => {
-		context.contentElem = contentElem;
-		context.onContentMount();
-	});
-	return (
-		<div {...props} style={{ height: `${context.height()}px`, position: 'relative' }} ref={contentElem}>
-			<div style={{
-				position: 'absolute',
-				top: context.itemsWrapperTop() + 'px',
-				right: 0,
-				left: 0
-			}}>
-				{context.items()}
-			</div>
-		</div>
-	);
-}
-
-type VirtualContextValue = {
-	height: Accessor<number>,
-	items: Accessor<JSXElement>,
-	itemsWrapperTop: Accessor<number>,
-	contentElem: HTMLElement,
-	onContentMount: () => void,
-};
-
-const VirtualContext = createContext<VirtualContextValue>({
-	height: undefined as any,
-	items: undefined as any,
-	itemsWrapperTop: undefined as any,
-	contentElem: undefined as any,
-	onContentMount: undefined as any,
-});
