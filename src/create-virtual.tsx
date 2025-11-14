@@ -13,7 +13,7 @@ export interface VirtualList {
 	Content: (props: JSX.HTMLAttributes<HTMLDivElement>) => JSX.Element;
 }
 
-/** Memorized rendererd item */
+/** Memorized renderered item */
 interface RenderedItem<Model> {
     model: Model;
     element: JSXElement;
@@ -152,16 +152,15 @@ export function createVirtualList<Model extends object>(params: {
 		contentElem: undefined as any,
 		onContentMount(el) {
 			Scroll.setContentElement(el);
-			Scroll.measureContainer();
 		},
 	};
 
 	// Outer container (scrollable) of virtual list
-	function onContainerMounted(el: HTMLElement) {
-		Scroll.setScrollElem(el);
+	function onRootMount(el: HTMLElement) {
+		Scroll.setRootElement(el);
 		if (params.itemHeight === undefined) {
 			// When measuring of items height is required
-			measurer = createItemsMeasusrer(Scroll.scrollTop, [contentHeight, setContentHeight], el, defaultItemHeight);
+			measurer = createItemsMeasusrer(Scroll, [contentHeight, setContentHeight], defaultItemHeight);
 		}
 	}
 
@@ -169,7 +168,7 @@ export function createVirtualList<Model extends object>(params: {
 		Root: (props: ComponentProps<'div'>) => {
 			return (
 				<VirtualContext.Provider value={context}>
-					<div {...props} ref={onContainerMounted} style={{ position: 'relative' }}>
+					<div {...props} ref={onRootMount} style={{ position: 'relative' }}>
 						{props.children}
 					</div>
 				</VirtualContext.Provider>
@@ -210,15 +209,14 @@ export function Content(props: ComponentProps<'div'>) {
  * Measuremens for items in case when items have variable heights.
  */
 function createItemsMeasusrer<Model extends object>(
-	scrollTop: Accessor<number>,
-	heightSig: Signal<number>,
-	scrollElem: HTMLElement,
+	Scroll: ReturnType<typeof trackScroll>,
+	contentHeightSignal: Signal<number>,
 	expectedItemHeight: number,
 ) {
 	const itemsHeights = new WeakMap<Model, number>();
 	const itemsToMeasure = new Map<Model, HTMLElement>();
-	const setHeight = heightSig[1];
-	const height = heightSig[0];
+	const setContentHeight = contentHeightSignal[1];
+	const contentHeight = contentHeightSignal[0];
 	let itemMarginTop: number;
 	let firstVisibleItemToMeasure: Model|undefined = undefined;
 	let measureAnimationFrameID = -1;
@@ -278,14 +276,14 @@ function createItemsMeasusrer<Model extends object>(
 	// - scroll top position
 	// - height of the whole list
 	function ajustAfterRenderingNonMeasuredItemsAbove(items: number, compoundHeight: number) {
-		const fromTop = scrollTop();
+		const fromTop = Scroll.scrollTop();
 		const expectedHeight = items * expectedItemHeight; 
 
 		// often bigger than expected
 		const heightDelta = compoundHeight - expectedHeight;
 
-		scrollElem.scroll({ top: fromTop + heightDelta});
-		setHeight(height() + heightDelta);
+		Scroll.scroll(fromTop + heightDelta);
+		setContentHeight(contentHeight() + heightDelta);
 	}
 
 	function scheduleMesure(item: Model, el: HTMLElement) {
@@ -305,7 +303,6 @@ function createItemsMeasusrer<Model extends object>(
 
 	return {
 		scheduleMesure,
-		measure,
 		has: itemsHeights.has.bind(itemsHeights),
 		get: itemsHeights.get.bind(itemsHeights),
 	}
@@ -325,7 +322,7 @@ function trackScroll () {
     let scrollState: number = ScrollState.IDLE; // TODO: why do I need this now?
 	let ticking = false;
 
-	function setScrollElem(elem: HTMLElement) {
+	function setRootElement(elem: HTMLElement) {
 		scrollElem = elem;
 		elem.addEventListener('scroll', onScroll);
 	}
@@ -355,12 +352,23 @@ function trackScroll () {
 	});
 
 	return {
+		/** Current scroll top position. */
 		scrollTop,
+		/** Client height of scrollable element. */
 		viewportHeight,
+		/** Offset of content wrapper from top of the outer wrapper (if outer has paddings or content besides virtual list) */
 		contentOffsetTop,
-		setScrollElem,
-		setContentElement: (el: HTMLElement) => contentElement = el,
-		measureContainer,
+		/** Scrolls Root container to given position */
+		scroll: (top: number): void => {
+			scrollElem.scroll({ top });
+		},
+		/** Pass the ref of root element */
+		setRootElement,
+		/** Pass the ref of content element */
+		setContentElement: (el: HTMLElement) => {
+			contentElement = el;
+			measureContainer();
+		},
 	}
 
 }
