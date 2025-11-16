@@ -72,3 +72,43 @@ Item 10 should be added
 | Item 11      |     | Item 11      |
 | Item 12      |     | Item 12      |
 ```
+
+## Pseudo code
+
+```
+onChange(items)
+    diff = buildDiff(oldItems, items)
+    diff.deleted.forEach => deleteCache
+    diff.changed.forEach => updateModel; invalidateHeight
+
+onChange(scrollTop, rootHeight, items)
+    for item in items
+        stackHeight
+
+        if item isnt inViewport
+            skip
+
+        if item isRendered
+            if item isSameAsRenderedModel
+                keep renderedComponent
+            else
+                updateRenderedModel with item
+                scheduleMeasure of renderedComponent
+        else 
+            newRenderedComponent = render item
+            scheduleMeasure of newRenderedComponent
+
+onRendered()
+    for item in measuringItems
+        box = measure item
+        updateHeightOfRenderedItems with box
+
+    if inViewport(renderedHeight) < viewport.height
+        schedule additionalRender
+
+    heightDelta = aboveViewport(renderedHeight) - aboveViewport(mesuredHeight)
+
+    if heightDelta !== 0
+        ajustScroll with heightDelta
+
+```

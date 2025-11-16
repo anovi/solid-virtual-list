@@ -1,6 +1,7 @@
-import type { Setter } from "solid-js";
+import type { Accessor, Setter } from "solid-js";
 
 export type Model = {
+	id: string;
 	title: string;
 	description: string;	
 	count: number;
@@ -29,6 +30,7 @@ export function makeModels(amount = 9999) {
 	const result: Model[] = [];
 	for (let index = 0; index < amount; index++) {
 		result.push({
+			id: String(index),
 			title: `Item ${index}`,
 			description: getRandomDescription(),
 			count: 0,
@@ -38,22 +40,33 @@ export function makeModels(amount = 9999) {
 }
 
 export function randomlyChangeModels(
-	get: Model[],
+	get: Accessor<Model[]>,
 	set: Setter<Model[]>,
 	intervalMs: number,
 	indexGenerator?: Generator<number>
 ): number {
-	const length = get.length;
+	const length = get().length;
 	// Default to random generator if not provided
 	const generator = indexGenerator ?? randomIndexGenerator(length);
 	return setInterval(() => {
 		const { value: index } = generator.next();
 		// @ts-ignore
-		set(index, (model: Model) => ({
-			description: getRandomDescription(),
-			title: `Item ${index} changed ${model.count + 1}`,
-			count: model.count + 1
-		}));
+		// set(index, (model: Model) => ({
+		// 	description: getRandomDescription(),
+		// 	title: `Item ${index} changed ${model.count + 1}`,
+		// 	count: model.count + 1
+		// }));
+		const model = get()[index];
+		set([
+			...get().slice(0, index),
+			{
+				...model,
+				description: getRandomDescription(),
+				title: `Item ${index} changed ${model.count + 1}`,
+				count: model.count + 1
+			},
+			...get().slice(index + 1),
+		])
 	}, intervalMs);
 }
 

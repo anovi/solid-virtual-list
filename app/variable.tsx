@@ -36,8 +36,8 @@ export function Variable() {
 				<div class="virtualList__itemDescription">{item.description}</div>				
 			</div>
 		},
-		expectedItemHeight: 100,
-		renderBeyondFold: 100,
+		expectedItemHeight: 150,
+		renderBeyondFold: 400,
 	});
 
 	return (

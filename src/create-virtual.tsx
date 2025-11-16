@@ -1,5 +1,7 @@
-import type { Accessor, JSX, JSXElement, ComponentProps, Signal, } from 'solid-js';
-import { createContext, createMemo, createRoot, createSignal, onCleanup, onMount, useContext } from 'solid-js';
+import type { Accessor, JSX, JSXElement, ComponentProps, Signal } from 'solid-js';
+import { createContext, createEffect, createMemo, createRoot, createSignal, on, createComputed, onCleanup, onMount, useContext } from 'solid-js';
+import { createStore, reconcile, unwrap, type SetStoreFunction } from 'solid-js/store';
+import { compareArraysById } from './some';
 
 
 export interface VirtualList {
@@ -16,6 +18,7 @@ export interface VirtualList {
 /** Memorized renderered item */
 interface RenderedItem<Model> {
     model: Model;
+	setModel: SetStoreFunction<Model>;
     element: JSXElement;
     dispose: () => void;
 }
@@ -39,7 +42,7 @@ const VirtualContext = createContext<VirtualContextValue>(undefined);
 /**
  * Creates virtual list.
  */
-export function createVirtualList<Model extends object>(params: {
+export function createVirtualList<Model extends { id: string }>(params: {
     models: Accessor<Model[]>,
     itemHeight?: number,
 	expectedItemHeight?: number,
@@ -60,7 +63,8 @@ export function createVirtualList<Model extends object>(params: {
 	const Scroll = trackScroll();
 	
     // Cache of previous rendered items: recreated at each cycle
-    let renderedItems: Map<Model, RenderedItem<Model>> = new Map();
+    let renderedItems: Map<string, RenderedItem<Model>> = new Map();
+	let modelsCache: Model[];
 
 	// Created if items has no fixed height: `itemHeight` param is not present
 	let measurer: ReturnType<typeof createItemsMeasusrer>|undefined;
@@ -69,13 +73,28 @@ export function createVirtualList<Model extends object>(params: {
 	const [contentHeight, setContentHeight] = createSignal<number>(0);
 	const [itemsWrapperTop, setItemsWrapperTop] = createSignal(0);
 
-    const itemsMemo = createMemo<JSXElement[]>(
-        () => {
+	// Make diff on model changes and update measurements cache
+	createComputed(on(models, () => {
+		if (measurer && modelsCache) {
+			// Compare arrays
+			const diff = compareArraysById(modelsCache, unwrap(models()), 'id');
+			// Delete or invalidate measurments
+			diff.changed.forEach(changed => measurer!.invalidate(changed.id));
+			diff.removed.forEach(changed => measurer!.delete(changed.id));
+			// console.log(diff);
+		}
+	}));
+
+    const itemsMemo = createMemo<JSXElement[]>(on(
+		// Dependencies
+		[models, Scroll.contentOffsetTop, Scroll.viewportHeight, Scroll.scrollTop,],
+        // Memo function
+		() => {
 			const items: JSXElement[] = [];
 
             // Cache of current cycle
-            const modelsItems = models();
-            const currentCache: Map<Model, RenderedItem<Model>> = new Map();
+            const modelsItems = unwrap(models());
+            const currentCache: Map<string, RenderedItem<Model>> = new Map();
             const fromTop = Scroll.scrollTop();
             
             let itemsHeightCompounded = 0;
@@ -85,7 +104,7 @@ export function createVirtualList<Model extends object>(params: {
                 const item = modelsItems[index];
                 const itemTop = itemsHeightCompounded;
 				// Get item height: fixed OR measured OR expected size
-				const curItemHeight = measurer && measurer.has(item) ? measurer.get(item)! : defaultItemHeight;
+				const curItemHeight = measurer && measurer.has(item.id) ? measurer.get(item.id)! : defaultItemHeight;
 
 				const posFrom = Scroll.contentOffsetTop() + itemsHeightCompounded;
 				const posTo = Scroll.contentOffsetTop() + itemsHeightCompounded + curItemHeight;
@@ -105,25 +124,47 @@ export function createVirtualList<Model extends object>(params: {
                 let node: JSXElement;
 
                 // Check if element will be reused or rerendered
-                if (renderedItems.has(item)) {
-                    currentCache.set(item, renderedItems.get(item)!)
-                    node = renderedItems.get(item)!.element;
-					renderedItems.delete(item); // so it will not be disposed
+                if (renderedItems.has(item.id)) {
+					const renderedItem = renderedItems.get(item.id)!
+					if (renderedItem.model !== item) {
+						// Model has changed. Need to update model.
+						renderedItem.model = item;
+						renderedItem.setModel(reconcile(item));
+					}
+					node = renderedItem.element;
+					currentCache.set(item.id, renderedItem);
+					renderedItems.delete(item.id); // so it will not be disposed
                 } else {
                     node = createRoot((dispose) => {
+						const [itemTrackable, setItemModel] = createStore(item);
+						let htmlElem!: HTMLElement;
+						// Schedule mesurement every time the model is updated.
+						createEffect(on(
+							() => triggerTrackableAsDependency(itemTrackable),
+							() => {
+								console.log('!')
+								if (!htmlElem) return;
+								else if (measurer && measurer.isRequiredMesure(item.id)) {
+									console.log('Measure effect!')
+									measurer.scheduleMesure(item, htmlElem);
+								}
+							}
+						));
                         // new item
-                        currentCache.set(item, {
+                        currentCache.set(item.id, {
                             model: item,
+							setModel: setItemModel,
                             element: null,
                             dispose: dispose,
                         });
-                        return itemComponent(item, index, (el) => {
-							if (measurer && !measurer.has(item)) {
-								measurer.scheduleMesure(item, el);
-							}
+                        return itemComponent(itemTrackable, index, (el) => {
+							htmlElem = el;
+							// if (measurer && !measurer.has(item)) {
+							// 	measurer.scheduleMesure(item, el);
+							// }
 						});
                     });
-                    currentCache.get(item)!.element = node;
+                    currentCache.get(item.id)!.element = node;
                 }
                 items.push(node);
             }
@@ -136,6 +177,7 @@ export function createVirtualList<Model extends object>(params: {
 
             // Update cache
             renderedItems = currentCache;
+			modelsCache = modelsItems;
 
 			// Triggers DOM updates
 			setContentHeight(itemsHeightCompounded);
@@ -143,7 +185,7 @@ export function createVirtualList<Model extends object>(params: {
 
 			return items;
         }
-    );
+    ));
 
 	const context: VirtualContextValue = {
 		contentHeight,
@@ -208,12 +250,13 @@ export function Content(props: ComponentProps<'div'>) {
 /**
  * Measuremens for items in case when items have variable heights.
  */
-function createItemsMeasusrer<Model extends object>(
+function createItemsMeasusrer<Model extends { id: string }>(
 	Scroll: ReturnType<typeof trackScroll>,
 	contentHeightSignal: Signal<number>,
 	expectedItemHeight: number,
 ) {
-	const itemsHeights = new WeakMap<Model, number>();
+	const invalidItemHeights = new Set<string>();
+	const itemsHeights = new Map<string, number>();
 	const itemsToMeasure = new Map<Model, HTMLElement>();
 	const setContentHeight = contentHeightSignal[1];
 	const contentHeight = contentHeightSignal[0];
@@ -226,7 +269,6 @@ function createItemsMeasusrer<Model extends object>(
 		let compoundMeasuredHeight = 0;
 		let newItemMarginValue = 0;
 		let firstWithMargin: HTMLElement|null = null;
-		// console.group('Measuring', itemsToMeasure.size)
 		itemsToMeasure.forEach((elem, model) => {
 			const height = elem.getBoundingClientRect().height;
 			if (itemMarginTop === undefined) {
@@ -242,8 +284,8 @@ function createItemsMeasusrer<Model extends object>(
 			}
 			if (firstVisibleItemToMeasure === model) firstVisibleItemToMeasure = undefined;
 			compoundMeasuredHeight += (itemMarginTop || 0) + height;
-			itemsHeights.set(model, (itemMarginTop || 0) + height);
-			// console.log((itemMarginTop || 0) + height)
+			itemsHeights.set(model.id, (itemMarginTop || 0) + height);
+			if (invalidItemHeights.has(model.id)) invalidItemHeights.delete(model.id);
 		});
 		if (!itemMarginTop) itemMarginTop = 0;
 		if (newItemMarginValue && firstWithMargin) {
@@ -251,10 +293,9 @@ function createItemsMeasusrer<Model extends object>(
 			// that were saved without it.
 			for (const [model, element] of itemsToMeasure) {
 				if (element === firstWithMargin) break; // until first elem with margin met
-				itemsHeights.set(model, itemsHeights.get(model)! + itemMarginTop);
+				itemsHeights.set(model.id, itemsHeights.get(model.id)! + itemMarginTop);
 			}
 		}
-		// console.groupEnd()
 		measureAnimationFrameID = -1;
 		itemsToMeasure.clear();
 		firstVisibleItemToMeasure = undefined;
@@ -288,7 +329,6 @@ function createItemsMeasusrer<Model extends object>(
 
 	function scheduleMesure(item: Model, el: HTMLElement) {
 		// Add to measuring
-		// console.log('TO measure', el)
 		itemsToMeasure.set(item, el);
 		if (!firstVisibleItemToMeasure) firstVisibleItemToMeasure = item;
 		queueMicrotask(() => {
@@ -305,6 +345,9 @@ function createItemsMeasusrer<Model extends object>(
 		scheduleMesure,
 		has: itemsHeights.has.bind(itemsHeights),
 		get: itemsHeights.get.bind(itemsHeights),
+		delete: itemsHeights.delete.bind(itemsHeights),
+		invalidate: (id: string) => invalidItemHeights.add(id),
+		isRequiredMesure: (id: string) => invalidItemHeights.has(id) || !itemsHeights.has(id),
 	}
 }
 
@@ -371,4 +414,14 @@ function trackScroll () {
 		},
 	}
 
+}
+
+function triggerTrackableAsDependency <T extends { id: string, [key: string]: any }> (item: T): unknown[] {
+	const result = [];
+	for (const key in item) {
+		if (!Object.hasOwn(item, key)) continue;
+		if (key === 'id') continue;
+		result.push(item[key]);
+	}
+	return result;
 }
