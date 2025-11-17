@@ -98,6 +98,18 @@ button:focus-visible {
 .virtualList__item.virtualList__item--fixed {
 	height: 30px;
 }
+@keyframes UpdatedItemBGAnimation {
+	from {
+    	background-color: oklch(93.3% 0.19724 104.33 / 0.698);
+  	}
+	to {
+    	background-color: oklch(93.3% 0.19724 104.33 / 0);
+  	}
+}
+.virtualList__item.virtualList__item--updated {
+	animation: UpdatedItemBGAnimation 2s ease-out forwards;
+}
+
 .virtualList__itemTitle {
 	font-weight: 600;
 }

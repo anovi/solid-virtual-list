@@ -41,7 +41,7 @@ export class Render<Model extends { id: string }> {
 		if (!renderedItem) return false;
 		const model = unwrap(renderedItem.model);
 		if (model !== newModel)
-			console.log('Check', model !== newModel, model, newModel)
+			console.log('ModelChanged:', model !== newModel, model, newModel)
 		return model !== newModel;
 	}
 
@@ -74,10 +74,11 @@ export class Render<Model extends { id: string }> {
 	render(item: Model, index: number) {
 		let renderedItem: RenderedItem<Model>;
 		const node = createRoot((dispose) => {
-			const [itemTrackable, setItemModel] = createStore({ ...item });
+			const [itemTrackable, setItemModel] = createStore({ ...item }); // TODO: desctructuring possibly redundant
 			let htmlElem!: HTMLElement;
 			// Schedule mesurement every time the model is updated.
 			createEffect(on(
+				// HACK: to create store as dependency it reads all properties of the model.
 				() => triggerTrackableAsDependency(itemTrackable),
 				() => {
 					if (!htmlElem) return;
@@ -95,12 +96,7 @@ export class Render<Model extends { id: string }> {
 				dispose: dispose,
 				keep: false,
 			};
-			return this.itemComponent(itemTrackable, index, (el) => {
-				htmlElem = el;
-				// if (measurer && !measurer.has(item)) {
-				// 	measurer.scheduleMesure(item, el);
-				// }
-			});
+			return this.itemComponent(itemTrackable, index, (el) => htmlElem = el);
 		});
 		renderedItem!.element = node;
 		this.renderedItems.set(item.id, renderedItem!);
