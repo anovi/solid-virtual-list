@@ -1,6 +1,4 @@
-import { onCleanup, type Signal } from "solid-js";
-
-import { type Scroll } from "./scroll";
+import { onCleanup } from "solid-js";
 
 
 

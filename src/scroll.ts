@@ -1,5 +1,6 @@
 import { createSignal, onCleanup } from "solid-js";
 
+
 export interface Scroll {
 
 	getScrollTop: () => number,

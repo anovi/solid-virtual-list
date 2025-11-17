@@ -2,10 +2,9 @@ import type { Measurement } from "./measure";
 import { type Scroll } from "./scroll";
 
 
-export class HeightData {
+export class RangesData {
 	
 	readonly bufferSize: number;
-	// readonly itemsHeights = new Map<string, number>();
 	public compoundedHeight: number = 0;
 	public defaultItemHeight: number;
 	public firstRenderedItemTop: number = -1;
