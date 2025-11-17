@@ -1,25 +1,24 @@
-import { createEffect, createSignal } from 'solid-js';
-import { createStore } from 'solid-js/store';
+import { createEffect, createSignal, untrack } from 'solid-js';
 
 import { createVirtualList } from '../src/create-virtual'
-import { makeModels, randomlyChangeModels } from './models'
+import { incrementalIndexGenerator, makeModels, randomlyChangeModels } from './models'
 import './App.css'
 import { Head } from './Head';
 
 
 export function Simple() {
 	const [amout, setAmount] = createSignal(9999);
-	const [models, setModels] = createStore(makeModels(amout()));
+	const [models, setModels] = createSignal(makeModels(amout()));
 	const [changeInterval, setChangeInterval] = createSignal(200);
 	let changeTimerID: number = -1;
 
 	createEffect(() => {
 		if (changeTimerID >= 0) clearInterval(changeTimerID);
-		changeTimerID = randomlyChangeModels(models, setModels, changeInterval());
+		changeTimerID = randomlyChangeModels(models, setModels, changeInterval(), incrementalIndexGenerator(untrack(() => models().length)));
 	});
 
 	const Virtual = createVirtualList({
-		models: () => models,
+		models: models,
 		itemComponent: (item, _index, ref) => {
 			return <div class="virtualList__item" ref={ref}>{item.title}</div>
 		},

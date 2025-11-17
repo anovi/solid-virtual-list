@@ -1,15 +1,14 @@
 import { createEffect, createSignal, onMount } from 'solid-js';
-import { createStore } from 'solid-js/store';
 
 import { createVirtualList } from '../src/create-virtual'
-import { incrementalIndexGenerator, makeModels, randomIndexGenerator, randomlyChangeModels } from './models'
+import { incrementalIndexGenerator, makeModels, randomlyChangeModels } from './models'
 import './App.css'
 import { Head } from './Head';
 
 
 export function Variable() {
 	const [amout, setAmount] = createSignal(100);
-	const [models, setModels] = createStore(makeModels(amout()));
+	const [models, setModels] = createSignal(makeModels(amout()));
 	const [changeInterval, setChangeInterval] = createSignal(200);
 	let changeTimerID: number = -1;
 	let scrollElem!: HTMLDivElement;
@@ -25,11 +24,11 @@ export function Variable() {
 	});
 
 	onMount(() => {
-		scrollElem.scroll({ top: 99999 })
+		// scrollElem.scroll({ top: 600 })
 	});
 
 	const Virtual = createVirtualList({
-		models: () => models,
+		models: models,
 		itemComponent: (item, _index, ref) => {
 			return <div class="virtualList__item" ref={ref}>
 				<div class="virtualList__itemTitle">{item.title}</div>

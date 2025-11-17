@@ -1,4 +1,4 @@
-import type { Accessor, Setter } from "solid-js";
+import { untrack, type Accessor, type Setter } from "solid-js";
 
 export type Model = {
 	id: string;
@@ -45,27 +45,22 @@ export function randomlyChangeModels(
 	intervalMs: number,
 	indexGenerator?: Generator<number>
 ): number {
-	const length = get().length;
+	const length = untrack(() => get().length);
 	// Default to random generator if not provided
 	const generator = indexGenerator ?? randomIndexGenerator(length);
 	return setInterval(() => {
 		const { value: index } = generator.next();
-		// @ts-ignore
-		// set(index, (model: Model) => ({
-		// 	description: getRandomDescription(),
-		// 	title: `Item ${index} changed ${model.count + 1}`,
-		// 	count: model.count + 1
-		// }));
-		const model = get()[index];
+		const models = untrack(() => get());
+		const model = models[index];
 		set([
-			...get().slice(0, index),
+			...models.slice(0, index),
 			{
 				...model,
 				description: getRandomDescription(),
 				title: `Item ${index} changed ${model.count + 1}`,
 				count: model.count + 1
 			},
-			...get().slice(index + 1),
+			...models.slice(index + 1),
 		])
 	}, intervalMs);
 }
