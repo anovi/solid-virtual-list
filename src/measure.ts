@@ -89,7 +89,7 @@ export function createItemsMeasusrer<Model extends { id: string }>(
 		// often bigger than expected
 		const heightDelta = compoundHeight - expectedHeight;
 
-		Scroll.scroll(fromTop + heightDelta);
+		Scroll.ajustScroll(fromTop + heightDelta);
 		setContentHeight(contentHeight() + heightDelta);
 	}
 

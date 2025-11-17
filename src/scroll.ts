@@ -8,7 +8,7 @@ export interface Scroll {
 
 	getContentOffsetTop: () => number,
 
-	scroll: (top: number) => void,
+	ajustScroll: (top: number) => void,
 
 	setRootElement: (el: HTMLElement) => void;
 
@@ -33,6 +33,7 @@ export function trackScroll(): Scroll {
     let scrollAnimationFrameID = -1;
     let scrollState: number = ScrollState.IDLE; // TODO: why do I need this now?
 	let ticking = false;
+	let scrollAjustment = false;
 
 	function setRootElement(elem: HTMLElement) {
 		scrollElem = elem;
@@ -53,6 +54,7 @@ export function trackScroll(): Scroll {
 	}
 
     function onScroll() {
+		if (scrollAjustment) return scrollAjustment = false;
         if (!ticking) { 
             scrollAnimationFrameID = requestAnimationFrame(measureContainer);
             ticking = true;
@@ -70,8 +72,9 @@ export function trackScroll(): Scroll {
 		getVieportHeight,
 		/** Offset of content wrapper from top of the outer wrapper (if outer has paddings or content besides virtual list) */
 		getContentOffsetTop,
-		/** Scrolls Root container to given position */
-		scroll: (top: number): void => {
+		/** Scrolls Root container to given position without trigging rerender. */
+		ajustScroll: (top: number): void => {
+			scrollAjustment = true;
 			scrollElem.scroll({ top });
 		},
 		/** Pass the ref of root element */
