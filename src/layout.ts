@@ -45,7 +45,7 @@ export class LayoutData {
 	}
 
 	/** @deprecated possibly it's not needed */
-	isInVieport(pos: number): boolean {
+	isInViewport(pos: number): boolean {
 		const viewPortTop = this.scrollTop;
 		const viewPortBottom = viewPortTop + this.scrollData.getVieportHeight();
 		// console.log(`Is ${pos} in ${viewPortTop}–${viewPortBottom}`);

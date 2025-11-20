@@ -43,19 +43,19 @@ describe('LayoutData', () => {
 		
 		expect(layout.scrollDelta).toBe(0);
 
-		expect(layout.isInVieport(400)).toBe(true);
-		expect(layout.isInVieport(499)).toBe(true);
-		expect(layout.isInVieport(500)).toBe(false);
+		expect(layout.isInViewport(400)).toBe(true);
+		expect(layout.isInViewport(499)).toBe(true);
+		expect(layout.isInViewport(500)).toBe(false);
 
 		expect(layout.renderedHeights.get('4'), 'measured height of item 4 is ajusted').toBe(50);
 		expect(layout.compoundedHeight, 'compoundedHeight is ajusted').toBe(2000 - 50);
 	});
 
-	it('should have isInVieport to give ajusted values when a measurement is done', async () => {
+	it('should have isInViewport to give ajusted values when a measurement is done', async () => {
 		currentScrollTop = 500;
 		const layout = new LayoutData(scroll, 100); // with buffering
 		fillLayoutItems(layout, 20); // 20 models with height 100
-		expect(layout.isInVieport(450)).toBe(false); // not yet ajusted 
+		expect(layout.isInViewport(450)).toBe(false); // not yet ajusted 
 
 		layout.updateWithMeasurement({
 			measuredItemsDelta: new Map([
@@ -68,10 +68,10 @@ describe('LayoutData', () => {
 		expect(layout.scrollTop, 'scrollTop is ajusted').toBe(450);
 
 		// vieport is ajusted to a range 450–950 px
-		expect(layout.isInVieport(449)).toBe(false);
-		expect(layout.isInVieport(450)).toBe(true);
-		expect(layout.isInVieport(949)).toBe(true);
-		expect(layout.isInVieport(950)).toBe(false);
+		expect(layout.isInViewport(449)).toBe(false);
+		expect(layout.isInViewport(450)).toBe(true);
+		expect(layout.isInViewport(949)).toBe(true);
+		expect(layout.isInViewport(950)).toBe(false);
 
 		assert.deepEqual(layout.lastRenderedItem, { id: '10', top: 950, index: 10 });
 	});
@@ -101,7 +101,7 @@ describe('LayoutData', () => {
 		currentVieportHeight = 500;
 		const layout = new LayoutData(scroll, 100); // with buffering
 		fillLayoutItems(layout, 20); // 20 models with height 100
-		expect(layout.isInVieport(450)).toBe(false); // not yet ajusted 
+		expect(layout.isInViewport(450)).toBe(false); // not yet ajusted 
 
 		layout.updateWithMeasurement({
 			measuredItemsDelta: new Map([
@@ -114,10 +114,10 @@ describe('LayoutData', () => {
 		expect(layout.scrollTop, 'scrollTop is ajusted').toBe(450);
 
 		// scroll is ajusted to a range 450–950 px
-		expect(layout.isInVieport(449)).toBe(false);
-		expect(layout.isInVieport(450)).toBe(true);
-		expect(layout.isInVieport(949)).toBe(true);
-		expect(layout.isInVieport(950)).toBe(false);
+		expect(layout.isInViewport(449)).toBe(false);
+		expect(layout.isInViewport(450)).toBe(true);
+		expect(layout.isInViewport(949)).toBe(true);
+		expect(layout.isInViewport(950)).toBe(false);
 
 		assert.deepEqual(layout.lastRenderedItem, { id: '9', top: 950, index: 9 });
 	});

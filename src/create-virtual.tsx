@@ -182,7 +182,7 @@ export function createVirtualList<Model extends { id: string }>(params: {
 		// 		const model = models[i];
 		// 		const height = measurer!.get(model.id) || defaultItemHeight;
 		// 		console.log('Check', model)
-		// 		if (layout.isInVieport(curBottom)) {
+		// 		if (layout.isInViewport(curBottom)) {
 		// 			// Add item to render
 		// 			toRender.push(model);
 		// 		} else {
