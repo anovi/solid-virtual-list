@@ -65,6 +65,26 @@ export function randomlyChangeModels(
 	}, intervalMs);
 }
 
+export function updateModel(
+	get: Accessor<Model[]>,
+	set: Setter<Model[]>,
+	index: number,
+	description?: string,
+) {
+	const models = untrack(() => get());
+	const model = models[index];
+	set([
+		...models.slice(0, index),
+		{
+			...model,
+			description: description || getRandomDescription(),
+			title: `Item ${index} changed ${model.count + 1}`,
+			count: model.count + 1
+		},
+		...models.slice(index + 1),
+	])
+}
+
 /** Yields random indices in [0, length-1] forever */
 export function* randomIndexGenerator(length: number): Generator<number> {
 	while (true) {

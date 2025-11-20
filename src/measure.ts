@@ -80,10 +80,17 @@ export function createItemsMeasusrer<Model extends { id: string }>(
 	function scheduleMesure(item: Model, el: HTMLElement) {
 		// Add to measuring
 		itemsToMeasure.set(item, el);
-		queueMicrotask(() => {
-			if (itemsToMeasure.size === 0 || measureAnimationFrameID > -1) return;
+
+		// Schedule if it's not
+		if (measureAnimationFrameID === -1) {
 			measureAnimationFrameID = window.requestAnimationFrame(measure);
-		})
+			// NOTE: seems to work with just one animation frame
+			// // First animation frame: items rendered
+			// measureAnimationFrameID = window.requestAnimationFrame(() => {
+			// 	// Second animation frame: items mesured
+			// 	window.requestAnimationFrame(measure);
+			// });
+		}
 	}
 
 	onCleanup(() => {
@@ -104,9 +111,6 @@ export function createItemsMeasusrer<Model extends { id: string }>(
 }
 
 export interface Measurement{
-
-	// measuredItems: Map<string, Model>;
 	measuredItemsDelta: Map<string, number>;
 	compoundMeasuredHeightDelta: number;
-
 }

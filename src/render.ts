@@ -40,13 +40,10 @@ export class Render<Model extends { id: string }> {
 		const renderedItem = this.renderedItems.get(newModel.id);
 		if (!renderedItem) return false;
 		const model = unwrap(renderedItem.model);
-		if (model !== newModel)
-			console.log('ModelChanged:', model !== newModel, model, newModel)
 		return model !== newModel;
 	}
 
 	updateModel(model: Model): void {
-		console.log('Update', model.id)
 		this.renderedItems.get(model.id)?.setModel(reconcile(model));
 	}
 
@@ -58,6 +55,7 @@ export class Render<Model extends { id: string }> {
 		source.delete(id); // so it will not be disposed
 	}
 
+	/** @deprecated */
 	markForDisposal(id: string) {
 		const model = this.renderedItems.get(id);
 		if (model) model.keep = true;
@@ -83,7 +81,6 @@ export class Render<Model extends { id: string }> {
 				() => {
 					if (!htmlElem) return;
 					else if (this.measurer && this.measurer.isRequiredMesure(item.id)) {
-						console.log('Measure effect!')
 						this.measurer.scheduleMesure(item, htmlElem);
 					}
 				}

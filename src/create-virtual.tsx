@@ -4,7 +4,7 @@ import { createContext, createMemo, createSignal, on, createComputed, onMount, u
 
 import { compareArraysById } from './array';
 import { trackScroll } from './scroll';
-import { RangesData } from './height';
+import { LayoutData } from './layout';
 import { Render } from './render';
 import { createItemsMeasusrer, type Measurement } from './measure';
 
@@ -57,7 +57,7 @@ export function createVirtualList<Model extends { id: string }>(params: {
 	// Per cycle cache
 	let renderCache: Render<Model> = new Render((() => undefined));
 	let modelsCache: Model[];
-	let ranges: RangesData;
+	let layout: LayoutData;
 
 	// Optional: Created if items has no fixed height: `itemHeight` param is not present
 	let measurer: ReturnType<typeof createItemsMeasusrer>|undefined;
@@ -65,17 +65,14 @@ export function createVirtualList<Model extends { id: string }>(params: {
 	// Output signals for Content component for sizing the content box and positioning items inside it.
 	const [contentHeight, setContentHeight] = createSignal<number>(0);
 	const [itemsWrapperTop, setItemsWrapperTop] = createSignal(0);
-	let modelsChange = false; // remove
 
 	// Make diff on model changes and update measurements cache.
 	// It goes before Render computation, because we need to update measurer state first.
 	createComputed(on(modelsGetter, () => {
 		if (measurer && modelsCache) {
-			modelsChange = true;
 			const diff = compareArraysById(modelsCache, unwrap(modelsGetter()), 'id');
 			diff.changed.forEach(changed => measurer!.invalidate(changed.id));
 			diff.removed.forEach(removed => measurer!.delete(removed.id));
-			console.log(diff)
 		}
 	}));
 
@@ -86,24 +83,23 @@ export function createVirtualList<Model extends { id: string }>(params: {
         // Calculation of: rendered items, Content Height, Top position of Items Wrapper.
 		() => {
 			if (Scroll.getVieportHeight() === 0) return [];
-			ranges = new RangesData(Scroll, renderingBufferSize, defaultItemHeight);
+			layout = new LayoutData(Scroll, renderingBufferSize);
 			const newRender = new Render(params.itemComponent, measurer);
             const models = unwrap(modelsGetter());
 
-			console.group('Render');
-
-			console.log(
-				'ScrollTop:', Scroll.getScrollTop(),
-				' Viewport:', Scroll.getVieportHeight(),
-				' Offset:', Scroll.getContentOffsetTop(),
-			);
+			// console.group('Render');
+			// console.log(
+			// 	'ScrollTop:', Scroll.getScrollTop(),
+			// 	' Viewport:', Scroll.getVieportHeight(),
+			// 	' Offset:', Scroll.getContentOffsetTop(),
+			// );
 
             for (let index = 0; index < models.length; index++) {
                 const model = models[index];
 
 				// Get item height: fixed OR measured OR expected size
 				const curItemHeight = measurer && measurer.has(model.id) ? measurer.get(model.id)! : defaultItemHeight;
-				const isToRender = ranges.process(model.id, curItemHeight);
+				const isToRender = layout.process(model.id, curItemHeight);
 				if (!isToRender) continue;
 
                 if (renderCache.has(model.id)) {
@@ -122,11 +118,11 @@ export function createVirtualList<Model extends { id: string }>(params: {
 			modelsCache = models;
 
 			// Triggers DOM updates
-			setContentHeight(ranges.compoundedHeight);
-			setItemsWrapperTop(ranges.firstRenderedItemTop);
+			setContentHeight(layout.compoundedHeight);
+			setItemsWrapperTop(layout.firstRenderedItem!.top);
 
-			console.log('**OUTPUT**', `height: ${ranges.compoundedHeight}, renderedTop: ${ranges.firstRenderedItemTop}`)
-			console.groupEnd();
+			// console.log('**OUTPUT**', `height: ${layout.compoundedHeight}, renderedTop: ${layout.firstRenderedItemTop}`)
+			// console.groupEnd();
 
 			return newRender.items;
         }
@@ -144,24 +140,66 @@ export function createVirtualList<Model extends { id: string }>(params: {
 
 	// Render ajustments after measuring phase
 	function onMeasure(measurement: Measurement) {
-		if (!ranges) return;
+		if (!layout) return;
 
 		// Now, we need to decide:
 		// (A) how to ajust scroll position and height
 		// (B) and do we need more items to render, if rendered items do not cover viewport entirely.
 
-		console.group('On Measure')
-		console.log('Measurement', measurement)
+		// console.group('On Measure')
+		// console.log('Measurement', measurement)
 
-		// if (modelsChange) debugger;
-		ranges.updateWithMeasurement(measurement);
+		layout.updateWithMeasurement(measurement);
+
+		/**
+		 * Handle cases where height of mesured item is less than vieport height —
+		 * we need to render more items, if possible.
+		 * 
+		 * ???
+		*/
+
+		/**
+		 * Handle a case where:
+		 * - scroll at the bottom of the list
+		 * - delta is negative
+		 * 
+		 * Currently, it makes scroll glitch.
+		 * 
+		 * ???
+		*/
+
+		// Ajust rendered range
+		// if (measurement.compoundMeasuredHeightDelta > 0) {
+		// 	// maybe render more items below
+		// } else if (measurement.compoundMeasuredHeightDelta < 0) {
+		// 	// if (measurement.compoundMeasuredHeightDelta < 0 && layout.scrollDelta < 0) debugger;
+		// 	// maybe render more items above
+		// 	const models = unwrap(modelsGetter());
+		// 	let i = layout.firstRenderedItem!.index - 1;
+		// 	const toRender = [];
+		// 	let curBottom = layout.firstRenderedItem!.top;
+		// 	while (i > 0) {
+		// 		const model = models[i];
+		// 		const height = measurer!.get(model.id) || defaultItemHeight;
+		// 		console.log('Check', model)
+		// 		if (layout.isInVieport(curBottom)) {
+		// 			// Add item to render
+		// 			toRender.push(model);
+		// 		} else {
+		// 			break;
+		// 		}
+		// 		curBottom = curBottom - height;
+		// 		i--;
+		// 	}
+		// 	console.log('☝️ To Render Above:', toRender);
+		// }
 
 		if (measurement.compoundMeasuredHeightDelta !== 0) {
-			console.log('Height Δ:', measurement.compoundMeasuredHeightDelta)
+			// console.log('Height Δ:', measurement.compoundMeasuredHeightDelta)
 			setContentHeight(contentHeight() + measurement.compoundMeasuredHeightDelta); 
 		}
 
-		if (ranges.scrollDelta !== 0) {
+		if (layout.scrollDelta !== 0) {
 			/**
 			 * Questions:
 			 * 1. What if scroll is on the absolute end position and ajustment should prolong height and set scroll to bottom?
@@ -169,11 +207,11 @@ export function createVirtualList<Model extends { id: string }>(params: {
 			 *    to set scroll position.
 			 * 2. Does increasing the container’s height by itself not trigger a scroll event?
 			*/
-			console.log('Scroll Δ:', ranges.scrollDelta)
-			Scroll.ajustScroll(ranges.scrollDelta); // possibly doesn't work because browser have not the render phase done yet
+			// console.log('Scroll Δ:', layout.scrollDelta)
+			Scroll.ajustScroll(layout.scrollDelta); // possibly doesn't work because browser have not the render phase done yet
 		}
 
-		console.groupEnd();
+		// console.groupEnd();
 	}
 
 	// Outer container (scrollable) of virtual list

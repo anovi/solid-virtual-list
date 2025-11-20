@@ -42,7 +42,6 @@ export function trackScroll(): Scroll {
 	}
     
 	function measureContainer() {
-		console.log('---measureContainer---')
 		const delta = scrollElem.scrollTop - getScrollTop();
 		setScrollTop(scrollElem.scrollTop);
 		setViewportHeight(scrollElem.clientHeight);
@@ -76,7 +75,7 @@ export function trackScroll(): Scroll {
 		getContentOffsetTop,
 		/** Scrolls Root container to given position without trigging rerender. */
 		ajustScroll: (delta: number): void => {
-			scrollAjustment = true;
+			// scrollAjustment = true;
 			scrollElem.scroll({ top: getScrollTop() + delta });
 		},
 		/** Pass the ref of root element */

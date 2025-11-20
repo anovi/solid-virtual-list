@@ -1,14 +1,14 @@
 import { createEffect, createReaction, createRenderEffect, createSignal, onMount, untrack, useTransition } from 'solid-js';
 
 import { createVirtualList } from '../src/create-virtual'
-import { incrementalIndexGenerator, makeModels, randomlyChangeModels } from './models'
+import { incrementalIndexGenerator, makeModels, randomlyChangeModels, updateModel } from './models'
 import './App.css'
 import { Head } from './Head';
 
 
 
 export function Variable() {
-	const [amout, setAmount] = createSignal(10);
+	const [amout, setAmount] = createSignal(15);
 	const [models, setModels] = createSignal(makeModels(amout()));
 	const [changeInterval, setChangeInterval] = createSignal(1000);
 	let changeTimerID: number = -1;
@@ -22,20 +22,12 @@ export function Variable() {
 			changeInterval(),
 			incrementalIndexGenerator(untrack(() => models().length))
 		);
-		// setTimeout(() => {
-		// 	console.log('🧲 Change model')
-		// 	const _models = untrack(() => models())
-		// 	setModels([
-		// 		..._models.slice(0, 9),
-		// 		{
-		// 			..._models[9],
-		// 			description: 'Vestibulum',
-		// 			title: `Item 9 UPDATED`,
-		// 			count: 1
-		// 		},
-		// 	]);
-		// }, 1000);
 	});
+
+	function onButtonClick() {
+		console.log('🧲 Change model')
+		updateModel(models, setModels, 0, 'fuck super')
+	}
 
 	const Virtual = createVirtualList({
 		models: models,
@@ -62,10 +54,10 @@ export function Variable() {
 	});
 
 	onMount(() => {
-		// setTimeout(() => {
-		// 	console.log('💜 Scroll')
-		// 	scrollElem.scroll({ top: 10000 })
-		// }, 50);
+		setTimeout(() => {
+			// console.log('💜 Scroll')
+			// scrollElem.scroll({ top: 99000 })
+		}, 50);
 	});
 
 	return (
@@ -90,6 +82,7 @@ export function Variable() {
 				<div>
 					<p>Iitems have variable height. At specified interval, the title and description of a randomly chosen model is updated. So the resulting item height changes. The virtual list handles theese changes by making mesurements and asjusting scroll position.</p>
 				</div>
+				<div><button onclick={onButtonClick}>Change model</button></div>
 			</div>
 		</div>
 		</>
