@@ -44,6 +44,7 @@ export class LayoutData {
 		return pos < this.scrollTop;
 	}
 
+	/** @deprecated possibly it's not needed */
 	isInVieport(pos: number): boolean {
 		const viewPortTop = this.scrollTop;
 		const viewPortBottom = viewPortTop + this.scrollData.getVieportHeight();
@@ -56,8 +57,8 @@ export class LayoutData {
 		if (!this.renderedHeights.has(id)) return false;
 		const viewPortTop = this.scrollTop;
 		const viewPortBottom = viewPortTop + this.scrollData.getVieportHeight();
-		let posFrom = this.firstRenderedItem!.top;
-		let posTo = this.firstRenderedItem!.top;
+		let posFrom = this.scrollData.getContentOffsetTop() + this.firstRenderedItem!.top;
+		let posTo = posFrom;
 
 		for (const [curID, curHeight] of this.renderedHeights) {
 			posTo += curHeight;
@@ -70,7 +71,7 @@ export class LayoutData {
 
 	updateWithMeasurement(measurement: Measurement) {
 		const viewPortTop = this.scrollTop;
-		let posFrom = this.firstRenderedItem!.top;
+		let posFrom = this.scrollData.getContentOffsetTop() + this.firstRenderedItem!.top;
 
 		for (const [curID, curHeight] of this.renderedHeights) {
 			let ajustedHeight = curHeight;
@@ -120,13 +121,13 @@ export class LayoutData {
 	private addRendered(id: string, height: number) {
 		if (!this.firstRenderedItem) {
 			this.firstRenderedItem = {
-				top: this.compoundedHeight + this.scrollData.getContentOffsetTop(), // should not offset be included?
+				top: this.compoundedHeight, // offset because it's top from items container, not root
 				index: this.curIndex,
 				id
 			}
 		}
 		this.lastRenderedItem = {
-			top: this.compoundedHeight + this.scrollData.getContentOffsetTop(),  // should not offset be included?
+			top: this.compoundedHeight, // offset because it's top from items container, not root
 			index: this.curIndex,
 			id
 		}
